@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#170d12">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="德古拉追蹤">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="dracula-icon.svg">
+  <link rel="icon" href="dracula-icon.svg" type="image/svg+xml">
+  <title>德古拉追蹤紀錄軌</title>
+  <style>
+    :root{color-scheme:dark;--bg:#10090d;--card:#1b1016;--line:#51313e;--red:#a72c42;--red2:#d34a62;--text:#f5e9ed;--muted:#b89da7}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    body{margin:0;min-height:100svh;background:radial-gradient(circle at top,#32141f 0,#10090d 45%);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{width:min(100%,520px);margin:auto;padding:24px 16px calc(32px + env(safe-area-inset-bottom))}
+    h1{margin:0 0 6px;text-align:center;font-family:Georgia,"Noto Serif TC",serif;font-size:28px;letter-spacing:2px}
+    .hint{margin:0 0 22px;text-align:center;color:var(--muted);font-size:14px}
+    .panel{padding:16px;background:rgba(27,16,22,.94);border:1px solid var(--line);border-radius:18px;box-shadow:0 12px 34px #0007}
+    .add{display:grid}
+    .add button{width:100%;font-size:19px}
+    input{width:100%;min-height:52px;border:1px solid var(--line);border-radius:13px;background:#0e090b;color:var(--text);padding:0 14px;font-size:20px;outline:none}
+    input:focus{border-color:var(--red2);box-shadow:0 0 0 3px #d34a6225}
+    button{min-height:52px;border:0;border-radius:13px;background:var(--red);color:white;padding:0 20px;font-size:17px;font-weight:700;cursor:pointer}
+    button:active{transform:scale(.98)}
+    h2{margin:22px 0 10px;font-size:15px;color:var(--muted);font-weight:650;letter-spacing:1px}
+    .track{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+    .slot{position:relative;display:flex;align-items:center;justify-content:center;min-height:72px;border:1px solid var(--line);border-radius:14px;background:#120b0f;overflow:hidden}
+    .slot::before{content:attr(data-label);position:absolute;top:7px;left:9px;color:#846772;font:11px system-ui,sans-serif}
+    .slot.filled{border-color:#9d3a4c;background:linear-gradient(145deg,#35151f,#160c11);box-shadow:inset 0 0 20px #a72c4222}
+    .slot.editable{cursor:pointer}
+    .slot input{height:70px;border:0;background:transparent;text-align:center;padding:14px 4px 0;font:700 24px Georgia,serif;box-shadow:none}
+    .slot input:focus{box-shadow:inset 0 0 0 2px var(--red2)}
+    .lairs{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+    .lair{min-height:68px;border-style:dashed}
+    .actions{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:8px}
+    .secondary{min-height:42px;background:transparent;border:1px solid var(--line);color:var(--muted);padding:0 14px;font-size:14px}
+    dialog{width:min(calc(100% - 32px),440px);border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--text);padding:20px;box-shadow:0 20px 60px #000b}
+    dialog::backdrop{background:#000b;backdrop-filter:blur(3px)}
+    dialog h3{margin:0 0 8px;font-size:21px}
+    dialog p{margin:0 0 16px;color:var(--muted);line-height:1.6}
+    .choices{display:grid;gap:9px}
+    .choices button{width:100%}
+    .choices .discard{background:#34232a;color:#e9dce1}
+    .full{opacity:.45}
+    .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));translate:-50% 20px;padding:10px 15px;border:1px solid var(--line);border-radius:999px;background:#27161d;color:#fff;opacity:0;pointer-events:none;transition:.2s;white-space:nowrap}
+    .toast.show{opacity:1;translate:-50% 0}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>德古拉追蹤紀錄軌</h1>
+    <p class="hint">點擊任一格即可直接輸入，內容會自動儲存</p>
+    <section class="panel">
+      <div class="add">
+        <button id="moveBtn" type="button">德古拉移動一步 →</button>
+      </div>
+
+      <h2>追蹤軌跡</h2>
+      <div class="track" id="track"></div>
+
+      <h2>巢穴</h2>
+      <div class="lairs" id="lairs"></div>
+
+      <div class="actions">
+        <button class="secondary" id="undoBtn" type="button">↶ 上一步</button>
+        <button class="secondary" id="resetBtn" type="button">全部清空</button>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="lairDialog">
+    <h3>第 6 格離開軌跡</h3>
+    <p>數字 <strong id="leavingValue"></strong> 要移進哪一個巢穴？</p>
+    <div class="choices" id="choices"></div>
+  </dialog>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const KEY='dracula-tracker-v1';
+    const blank=()=>({track:Array(6).fill(''),lairs:Array(3).fill('')});
+    let state=load(), history=[];
+    const trackEl=document.querySelector('#track'), lairsEl=document.querySelector('#lairs');
+    const dialog=document.querySelector('#lairDialog'), choices=document.querySelector('#choices');
+
+    function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x?.track?.length===6&&x?.lairs?.length===3)return x}catch{}return blank()}
+    function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+    function snapshot(){history.push(JSON.stringify(state));if(history.length>20)history.shift()}
+    function render(){
+      trackEl.innerHTML=state.track.map((v,i)=>`<div class="slot editable ${v?'filled':''}" data-label="${i+1}"><input data-kind="track" data-index="${i}" inputmode="numeric" maxlength="4" value="${escapeHtml(v)}" aria-label="軌跡 ${i+1}"></div>`).join('');
+      lairsEl.innerHTML=state.lairs.map((v,i)=>`<div class="slot lair editable ${v?'filled':''}" data-label="巢穴 ${i+1}"><input data-kind="lairs" data-index="${i}" inputmode="numeric" maxlength="4" value="${escapeHtml(v)}" aria-label="巢穴 ${i+1}"></div>`).join('');
+      document.querySelector('#undoBtn').disabled=!history.length;
+      save();
+    }
+    function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+    function notify(msg){const t=document.querySelector('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(t.timer);t.timer=setTimeout(()=>t.classList.remove('show'),1400)}
+    function finishMove(lairIndex=null){
+      snapshot();
+      const leaving=state.track[5];
+      state.track=['',...state.track.slice(0,5)];
+      if(leaving&&lairIndex!==null)state.lairs[lairIndex]=leaving;
+      render();
+      const first=trackEl.querySelector('input');
+      first.focus();first.scrollIntoView({behavior:'smooth',block:'center'});
+      notify('已移動，請輸入新數字');
+    }
+    function askLair(value){
+      document.querySelector('#leavingValue').textContent=value;
+      choices.innerHTML=state.lairs.map((v,i)=>`<button type="button" data-lair="${i}" class="${v?'full':''}">巢穴 ${i+1}${v?`（取代 ${escapeHtml(v)}）`:''}</button>`).join('')+'<button type="button" class="discard" data-lair="discard">不進巢穴，直接移除</button>';
+      dialog.showModal();
+    }
+    document.querySelector('#moveBtn').addEventListener('click',()=>{
+      const leaving=state.track[5];leaving?askLair(leaving):finishMove();
+    });
+    choices.addEventListener('click',e=>{
+      const b=e.target.closest('[data-lair]');if(!b)return;
+      const pick=b.dataset.lair;dialog.close();finishMove(pick==='discard'?null:Number(pick));
+    });
+    document.addEventListener('focusin',e=>{if(e.target.matches('.slot input'))e.target.dataset.old=e.target.value});
+    document.addEventListener('input',e=>{
+      if(!e.target.matches('.slot input'))return;
+      const kind=e.target.dataset.kind,index=Number(e.target.dataset.index);
+      if(e.target.dataset.old!==undefined&&e.target.dataset.old!==e.target.value){snapshot();delete e.target.dataset.old}
+      state[kind][index]=e.target.value.trim();e.target.closest('.slot').classList.toggle('filled',!!state[kind][index]);save();
+    });
+    document.querySelector('#undoBtn').addEventListener('click',()=>{if(!history.length)return;state=JSON.parse(history.pop());render();notify('已回到上一步')});
+    document.querySelector('#resetBtn').addEventListener('click',()=>{if(!confirm('確定要清空所有軌跡與巢穴嗎？'))return;snapshot();state=blank();render();notify('已全部清空')});
+    render();
+    if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}))}
+  </script>
+</body>
+</html>

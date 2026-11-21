@@ -1,0 +1,19 @@
+{
+  "name": "德古拉追蹤紀錄軌",
+  "short_name": "德古拉追蹤",
+  "description": "德古拉六格追蹤軌跡與三個巢穴紀錄工具",
+  "lang": "zh-Hant",
+  "start_url": "./dracula-tracker.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10090d",
+  "theme_color": "#170d12",
+  "icons": [
+    {
+      "src": "dracula-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
